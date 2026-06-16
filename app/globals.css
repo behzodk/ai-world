@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-cream text-ink antialiased;
+  }
+
+  /* Hairline scrollbar to match the editorial, low-chrome aesthetic. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: theme("colors.zinc.300") transparent;
+  }
+}
