@@ -1,15 +1,96 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import LeftSidebar from "@/components/LeftSidebar";
-import RightPanel from "@/components/RightPanel";
-import BottomNav from "@/components/BottomNav";
-import FollowButton from "@/components/ui/FollowButton";
+import ProfileHeroCard from "@/components/ProfileHeroCard";
+import ProfileTabs from "@/components/ProfileTabs";
+import ProfileTopBar from "@/components/ProfileTopBar";
+import { relativeTime } from "@/lib/format";
+import { extractTags } from "@/lib/hashtags";
 import { createClient } from "@/lib/supabase/server";
-import type { Profile } from "@/lib/types";
+import type { Post, Profile } from "@/lib/types";
 
 type ProfilePageProps = {
   params: Promise<{ handle: string }>;
 };
+
+type PostAuthorProfile = Pick<
+  Profile,
+  "id" | "username" | "display_name" | "avatar_url"
+>;
+
+type ProfilePostRow = {
+  id: string;
+  body: string;
+  created_at: string;
+  author_id: string;
+  profiles: PostAuthorProfile | PostAuthorProfile[] | null;
+  likes: { count: number }[] | null;
+  reposts: { count: number }[] | null;
+};
+
+const profilePostSelect = `
+  id,
+  body,
+  created_at,
+  author_id,
+  profiles(id, username, display_name, avatar_url),
+  likes(count),
+  reposts(count)
+`;
+
+const tagChipClasses = [
+  "bg-lime/40",
+  "bg-sky-100",
+  "bg-rose-100",
+  "bg-violet-100",
+];
+
+function monthYear(iso: string) {
+  const date = new Date(iso);
+  const month = date.toLocaleString("en", { month: "short" }).toLowerCase();
+  return `${month} ${date.getFullYear()}`;
+}
+
+function mapProfilePost(
+  row: ProfilePostRow,
+  likedIds: Set<string>,
+  repostedIds: Set<string>,
+): Post {
+  const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+  const handle = profile?.username ?? "unknown";
+
+  return {
+    id: row.id,
+    author: {
+      name: profile?.display_name ?? handle,
+      handle,
+      avatar: profile?.avatar_url ?? `https://i.pravatar.cc/80?u=${handle}`,
+    },
+    body: row.body,
+    timestamp: relativeTime(row.created_at),
+    replies: 0,
+    reposts: row.reposts?.[0]?.count ?? 0,
+    likes: row.likes?.[0]?.count ?? 0,
+    bookmarks: 0,
+    likedByMe: likedIds.has(row.id),
+    repostedByMe: repostedIds.has(row.id),
+  };
+}
+
+function getTopTags(rows: ProfilePostRow[]) {
+  const counts = new Map<string, number>();
+
+  rows.forEach((row) => {
+    const uniqueTags = new Set(extractTags(row.body));
+    uniqueTags.forEach((tag) => counts.set(tag, (counts.get(tag) ?? 0) + 1));
+  });
+
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 4)
+    .map(([tag], index) => ({
+      tag,
+      className: tagChipClasses[index % tagChipClasses.length],
+    }));
+}
 
 export default async function ProfilePage({ params }: ProfilePageProps) {
   const { handle } = await params;
@@ -25,10 +106,16 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   ]);
 
   const user = userResult.data.user;
-  const profile = profileResult.data;
+  const profile = profileResult.data as Profile | null;
   if (!profile) notFound();
 
-  const [followersResult, followingResult, followResult] = await Promise.all([
+  const [
+    followersResult,
+    followingResult,
+    postCountResult,
+    followResult,
+    postsResult,
+  ] = await Promise.all([
     supabase
       .from("follows")
       .select("id", { count: "exact", head: true })
@@ -37,6 +124,10 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
       .from("follows")
       .select("id", { count: "exact", head: true })
       .eq("follower_id", profile.id),
+    supabase
+      .from("posts")
+      .select("id", { count: "exact", head: true })
+      .eq("author_id", profile.id),
     user && user.id !== profile.id
       ? supabase
           .from("follows")
@@ -45,96 +136,76 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
           .eq("following_id", profile.id)
           .maybeSingle()
       : Promise.resolve({ data: null }),
+    supabase
+      .from("posts")
+      .select(profilePostSelect)
+      .eq("author_id", profile.id)
+      .order("created_at", { ascending: false })
+      .limit(50),
   ]);
 
-  const typedProfile = profile as Profile;
-  const displayName = typedProfile.display_name ?? typedProfile.username;
+  const rows = (postsResult.data ?? []) as ProfilePostRow[];
+  const postIds = rows.map((row) => row.id);
+  const likedIds = new Set<string>();
+  const repostedIds = new Set<string>();
+
+  if (user && postIds.length > 0) {
+    const [{ data: myLikes }, { data: myReposts }] = await Promise.all([
+      supabase
+        .from("likes")
+        .select("post_id")
+        .eq("user_id", user.id)
+        .in("post_id", postIds),
+      supabase
+        .from("reposts")
+        .select("post_id")
+        .eq("user_id", user.id)
+        .in("post_id", postIds),
+    ]);
+
+    (myLikes ?? []).forEach((like) => likedIds.add(like.post_id));
+    (myReposts ?? []).forEach((repost) => repostedIds.add(repost.post_id));
+  }
+
+  const displayName = profile.display_name ?? profile.username;
   const avatar =
-    typedProfile.avatar_url ??
-    `https://i.pravatar.cc/160?u=${typedProfile.username}`;
-  const isOwnProfile = user?.id === typedProfile.id;
-  const followerCount = followersResult.count ?? 0;
+    profile.avatar_url ?? `https://i.pravatar.cc/160?u=${profile.username}`;
+  const postCount = postCountResult.count ?? 0;
   const followingCount = followingResult.count ?? 0;
+  const followerCount = followersResult.count ?? 0;
+  const isOwnProfile = user?.id === profile.id;
   const initialIsFollowing = Boolean(followResult.data);
+  const joinedYear = new Date(profile.created_at).getFullYear();
+  const joinedLabel = monthYear(profile.created_at);
+  const profilePosts = rows.map((row) =>
+    mapProfilePost(row, likedIds, repostedIds),
+  );
+  const topTags = getTopTags(rows);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-cream text-ink">
-      <LeftSidebar />
-      <main className="flex flex-1 flex-col overflow-y-auto border-r border-line pb-20 md:pb-0">
-        <header className="sticky top-0 z-10 border-b border-line bg-cream/80 px-4 py-3 backdrop-blur">
-          <h1 className="text-2xl font-semibold text-zinc-900">
-            {displayName}
-          </h1>
-          <p className="text-xs text-zinc-400">@{typedProfile.username}</p>
-        </header>
-
-        <section className="border-b border-zinc-200 p-4">
-          <div className="flex items-start gap-4">
-            {/* eslint-disable-next-line @next/next/no-img-element -- external avatar */}
-            <img
-              src={avatar}
-              alt={displayName}
-              className="h-20 w-20 shrink-0 rounded-full object-cover"
-            />
-
-            <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <h2 className="truncate text-2xl font-semibold text-zinc-900">
-                    {displayName}
-                  </h2>
-                  <p className="truncate text-sm text-zinc-400">
-                    @{typedProfile.username}
-                  </p>
-                </div>
-
-                {isOwnProfile ? (
-                  <button
-                    type="button"
-                    className="shrink-0 rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium text-zinc-900 transition-colors duration-150 hover:border-zinc-900"
-                  >
-                    Edit Profile
-                  </button>
-                ) : (
-                  <FollowButton
-                    targetUserId={typedProfile.id}
-                    initialIsFollowing={initialIsFollowing}
-                  />
-                )}
-              </div>
-
-              {typedProfile.bio && (
-                <p className="mt-3 text-sm leading-relaxed text-zinc-800">
-                  {typedProfile.bio}
-                </p>
-              )}
-
-              <div className="mt-4 flex items-center gap-5 text-sm">
-                <Link
-                  href={`/profile/${typedProfile.username}/following`}
-                  className="transition-colors duration-150 hover:text-violet-600"
-                >
-                  <span className="font-semibold text-zinc-900">
-                    {followingCount.toLocaleString()}
-                  </span>{" "}
-                  <span className="text-zinc-400">Following</span>
-                </Link>
-                <Link
-                  href={`/profile/${typedProfile.username}/followers`}
-                  className="transition-colors duration-150 hover:text-violet-600"
-                >
-                  <span className="font-semibold text-zinc-900">
-                    {followerCount.toLocaleString()}
-                  </span>{" "}
-                  <span className="text-zinc-400">Followers</span>
-                </Link>
-              </div>
-            </div>
-          </div>
-        </section>
+    <div className="h-screen w-screen overflow-hidden bg-cream text-ink">
+      <main className="h-full overflow-y-auto pb-12">
+        <ProfileTopBar
+          displayName={displayName}
+          postCount={postCount}
+          joinYear={joinedYear}
+        />
+        <ProfileHeroCard
+          profileId={profile.id}
+          username={profile.username}
+          displayName={displayName}
+          avatar={avatar}
+          bio={profile.bio}
+          joinedLabel={joinedLabel}
+          isOwnProfile={isOwnProfile}
+          initialIsFollowing={initialIsFollowing}
+          postCount={postCount}
+          followingCount={followingCount}
+          followerCount={followerCount}
+          tags={topTags}
+        />
+        <ProfileTabs posts={profilePosts} currentUserId={user?.id ?? null} />
       </main>
-      <RightPanel />
-      <BottomNav />
     </div>
   );
 }

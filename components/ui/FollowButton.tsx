@@ -10,12 +10,14 @@ type FollowButtonProps = {
   targetUserId: string;
   initialIsFollowing: boolean;
   onFollowChange?: (isFollowing: boolean, targetUserId: string) => void;
+  variant?: "outline" | "solid";
 };
 
 export default function FollowButton({
   targetUserId,
   initialIsFollowing,
   onFollowChange,
+  variant = "outline",
 }: FollowButtonProps) {
   const reduceMotion = useReducedMotion();
   const supabase = useMemo(() => createClient(), []);
@@ -30,7 +32,15 @@ export default function FollowButton({
   const following = isFollowing(targetUserId);
   const disabled = !currentUserId || currentUserId === targetUserId;
   const label =
-    following && hovered ? "Unfollow" : following ? "Following" : "Follow";
+    following && hovered ? "unfollow" : following ? "following" : "follow";
+  const buttonClass =
+    variant === "solid" && !following
+      ? "border-ink bg-ink text-white hover:bg-ink/80"
+      : following && hovered
+        ? "border-rose-500 text-rose-500"
+        : following
+          ? "border-zinc-900 text-zinc-900"
+          : "border-zinc-300 text-zinc-900 hover:border-zinc-900";
 
   useEffect(() => {
     let cancelled = false;
@@ -74,13 +84,9 @@ export default function FollowButton({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       whileTap={reduceMotion || disabled ? undefined : { scale: 0.96 }}
-      className={`relative inline-flex h-8 min-w-[96px] items-center justify-center overflow-hidden rounded-full border px-3 text-xs font-medium transition-colors duration-150 ${
-        following && hovered
-          ? "border-rose-500 text-rose-500"
-          : following
-            ? "border-zinc-900 text-zinc-900"
-          : "border-zinc-300 text-zinc-900 hover:border-zinc-900"
-      } ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+      className={`relative inline-flex h-9 min-w-[104px] items-center justify-center overflow-hidden rounded-full border px-4 text-sm font-medium transition-colors duration-150 ${buttonClass} ${
+        disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+      }`}
     >
       <AnimatePresence>
         {feedbackKey > 0 && !reduceMotion && (
@@ -91,7 +97,7 @@ export default function FollowButton({
             animate={{ opacity: 0, scale: 1.22 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.42, ease: "easeOut" }}
-            className="pointer-events-none absolute inset-0 rounded-full border border-violet-600"
+            className="pointer-events-none absolute inset-0 rounded-full border border-lime"
           />
         )}
       </AnimatePresence>
@@ -109,7 +115,7 @@ export default function FollowButton({
               initial={reduceMotion ? { opacity: 1 } : { opacity: 0, scale: 0.5 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ type: "spring", stiffness: 520, damping: 20 }}
-              className="text-violet-600"
+              className="text-ink"
             >
               <Check size={13} strokeWidth={3} />
             </motion.span>

@@ -1,21 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { Home, Compass, Bell, Mail, Bookmark, Plus, Sparkles } from "lucide-react";
 import SidebarUserMenu from "@/components/SidebarUserMenu";
 
 const navItems = [
-  { label: "Home", Icon: Home },
-  { label: "Explore", Icon: Compass },
-  { label: "Notifications", Icon: Bell, badge: "3" },
-  { label: "Messages", Icon: Mail, badge: "8" },
-  { label: "Bookmarks", Icon: Bookmark },
+  { label: "Home", href: "/", Icon: Home },
+  { label: "Explore", href: "#", Icon: Compass },
+  { label: "Notifications", href: "#", Icon: Bell, badge: "3" },
+  { label: "Messages", href: "#", Icon: Mail, badge: "8" },
+  { label: "Bookmarks", href: "#", Icon: Bookmark },
 ];
 
 // Responsive tiers: icon-only (w-16) from md, full icons + labels from xl.
 export default function LeftSidebar() {
-  const [active, setActive] = useState(0);
+  const pathname = usePathname();
 
   return (
     <aside className="hidden h-screen w-16 shrink-0 flex-col border-r border-line px-2 py-6 md:flex xl:w-64 xl:px-4">
@@ -36,13 +37,12 @@ export default function LeftSidebar() {
       </div>
 
       <nav className="flex flex-col gap-1">
-        {navItems.map(({ label, Icon, badge }, i) => {
-          const isActive = active === i;
+        {navItems.map(({ label, href, Icon, badge }) => {
+          const isActive = href === "/" ? pathname === "/" : false;
           return (
-            <button
+            <Link
               key={label}
-              type="button"
-              onClick={() => setActive(i)}
+              href={href}
               aria-label={label}
               className={`relative flex h-11 items-center justify-center gap-3 rounded-2xl px-3 text-sm transition-colors duration-150 xl:justify-start ${
                 isActive
@@ -66,7 +66,7 @@ export default function LeftSidebar() {
                   {badge}
                 </span>
               )}
-            </button>
+            </Link>
           );
         })}
       </nav>
