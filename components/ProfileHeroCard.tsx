@@ -11,6 +11,7 @@ import {
   Sparkles,
   Zap,
 } from "lucide-react";
+import ProfileFollowDialog from "@/components/ProfileFollowDialog";
 import FollowButton from "@/components/ui/FollowButton";
 
 type ProfileTag = {
@@ -87,6 +88,9 @@ export default function ProfileHeroCard({
   tags,
 }: ProfileHeroCardProps) {
   const reduceMotion = useReducedMotion();
+  const [followDialog, setFollowDialog] = useState<
+    "followers" | "following" | null
+  >(null);
   const fallbackBio =
     "shipping small tools for tech-native humans. agents, tiny uis, fast feedback loops.";
 
@@ -197,27 +201,38 @@ export default function ProfileHeroCard({
                 posts
               </p>
             </div>
-            <Link
-              href={`/profile/${username}/following`}
-              className="border-x border-line px-3 py-5 text-center transition-colors duration-150 hover:bg-paper/60"
+            <button
+              type="button"
+              onClick={() => setFollowDialog("following")}
+              className="cursor-pointer border-x border-line px-3 py-5 text-center transition-colors duration-150 hover:bg-paper/60"
             >
               <AnimatedStat value={followingCount} />
               <p className="mt-2 font-mono text-xs uppercase tracking-widest text-zinc-500">
                 following
               </p>
-            </Link>
-            <Link
-              href={`/profile/${username}/followers`}
-              className="px-3 py-5 text-center transition-colors duration-150 hover:bg-paper/60"
+            </button>
+            <button
+              type="button"
+              onClick={() => setFollowDialog("followers")}
+              className="cursor-pointer px-3 py-5 text-center transition-colors duration-150 hover:bg-paper/60"
             >
               <AnimatedStat value={followerCount} />
               <p className="mt-2 font-mono text-xs uppercase tracking-widest text-zinc-500">
                 followers
               </p>
-            </Link>
+            </button>
           </div>
         </div>
       </div>
+      <ProfileFollowDialog
+        profileId={profileId}
+        displayName={displayName}
+        type={followDialog ?? "followers"}
+        open={followDialog !== null}
+        onOpenChange={(open) => {
+          if (!open) setFollowDialog(null);
+        }}
+      />
     </motion.section>
   );
 }
