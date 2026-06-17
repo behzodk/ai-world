@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import ProfileFollowDialog from "@/components/ProfileFollowDialog";
 import FollowButton from "@/components/ui/FollowButton";
+import ProfilePhotoUploader from "@/components/ProfilePhotoUploader";
 
 type ProfileTag = {
   tag: string;
@@ -113,12 +114,24 @@ export default function ProfileHeroCard({
 
       <div className="px-5 pb-5 md:px-9 md:pb-8">
         <div className="flex items-start justify-between gap-4">
-          {/* eslint-disable-next-line @next/next/no-img-element -- external avatar */}
-          <img
-            src={avatar}
-            alt={displayName}
-            className="relative z-10 -mt-12 h-24 w-24 shrink-0 rounded-2xl border-4 border-paper object-cover"
-          />
+          <div className="relative z-10 -mt-12 shrink-0">
+            {isOwnProfile ? (
+              <ProfilePhotoUploader
+                endpoint="/api/profile/avatar"
+                initialAvatar={avatar}
+                alt={displayName}
+              />
+            ) : (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element -- external avatar */}
+                <img
+                  src={avatar}
+                  alt={displayName}
+                  className="h-24 w-24 rounded-2xl border-4 border-paper object-cover"
+                />
+              </>
+            )}
+          </div>
 
           <div className="mt-4 flex items-center gap-2">
             {isOwnProfile ? (

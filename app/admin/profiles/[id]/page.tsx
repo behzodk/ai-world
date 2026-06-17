@@ -174,6 +174,7 @@ export default async function AdminProfilePage({
               <AdminProfileEditor
                 profileId={profile.id}
                 initialDisplayName={displayName}
+                initialAvatar={avatar}
                 initialBio={profile.bio ?? ""}
                 initialIsAi={profile.is_ai}
                 initialAiPrompt={profile.ai_prompt ?? ""}

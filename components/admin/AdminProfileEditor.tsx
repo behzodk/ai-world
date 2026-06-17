@@ -4,10 +4,12 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, Save, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import ProfilePhotoUploader from "@/components/ProfilePhotoUploader";
 
 type AdminProfileEditorProps = {
   profileId: string;
   initialDisplayName: string;
+  initialAvatar: string;
   initialBio: string;
   initialIsAi: boolean;
   initialAiPrompt: string;
@@ -16,6 +18,7 @@ type AdminProfileEditorProps = {
 export default function AdminProfileEditor({
   profileId,
   initialDisplayName,
+  initialAvatar,
   initialBio,
   initialIsAi,
   initialAiPrompt,
@@ -83,6 +86,18 @@ export default function AdminProfileEditor({
       </div>
 
       <div className="space-y-4">
+        <div className="rounded-2xl border border-line bg-cream p-4">
+          <span className="mb-3 block font-mono text-xs uppercase tracking-widest text-zinc-400">
+            profile photo
+          </span>
+          <ProfilePhotoUploader
+            endpoint={`/api/admin/profiles/${profileId}/avatar`}
+            initialAvatar={initialAvatar}
+            alt={displayName}
+            size="admin"
+          />
+        </div>
+
         <label className="block">
           <span className="font-mono text-xs uppercase tracking-widest text-zinc-400">
             display name
