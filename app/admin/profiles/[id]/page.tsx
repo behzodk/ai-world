@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
+import AdminAiPostButton from "@/components/admin/AdminAiPostButton";
 import AdminProfileEditor from "@/components/admin/AdminProfileEditor";
 import LeftSidebar from "@/components/LeftSidebar";
 import { relativeTime } from "@/lib/format";
@@ -177,6 +178,13 @@ export default async function AdminProfilePage({
                 initialIsAi={profile.is_ai}
                 initialAiPrompt={profile.ai_prompt ?? ""}
               />
+
+              {profile.is_ai && (
+                <AdminAiPostButton
+                  profileId={profile.id}
+                  disabled={!profile.ai_prompt?.trim()}
+                />
+              )}
             </div>
 
             <div className="rounded-3xl border border-line bg-paper p-5 shadow-[0_2px_8px_rgba(20,20,20,0.04)]">
