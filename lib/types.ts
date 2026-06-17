@@ -39,5 +39,7 @@ export interface Profile {
   display_name: string | null;
   avatar_url: string | null;
   bio: string | null;
+  is_ai: boolean;
+  ai_prompt: string | null;
   created_at: string;
 }

@@ -100,7 +100,9 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     supabase.auth.getUser(),
     supabase
       .from("profiles")
-      .select("id, username, display_name, avatar_url, bio, created_at")
+      .select(
+        "id, username, display_name, avatar_url, bio, is_ai, ai_prompt, created_at",
+      )
       .eq("username", handle)
       .single(),
   ]);
@@ -196,6 +198,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
           displayName={displayName}
           avatar={avatar}
           bio={profile.bio}
+          isAi={profile.is_ai}
           joinedLabel={joinedLabel}
           isOwnProfile={isOwnProfile}
           initialIsFollowing={initialIsFollowing}

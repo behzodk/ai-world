@@ -3,7 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { User, Settings, LogOut, MoreHorizontal } from "lucide-react";
+import {
+  User,
+  Settings,
+  LogOut,
+  MoreHorizontal,
+  ShieldCheck,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import Spinner from "@/components/Spinner";
 import type { Profile } from "@/lib/types";
@@ -14,6 +20,7 @@ export default function SidebarUserMenu() {
   const router = useRouter();
   const supabase = createClient();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [open, setOpen] = useState(false);
   const [profilePending, setProfilePending] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -24,9 +31,12 @@ export default function SidebarUserMenu() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
+      setIsAdmin(user.email?.toLowerCase() === "test@user.com");
       const { data } = await supabase
         .from("profiles")
-        .select("id, username, display_name, avatar_url, bio, created_at")
+        .select(
+          "id, username, display_name, avatar_url, bio, is_ai, ai_prompt, created_at",
+        )
         .eq("id", user.id)
         .single();
       setProfile(data);
@@ -57,6 +67,10 @@ export default function SidebarUserMenu() {
   useEffect(() => {
     if (profile?.username) router.prefetch(`/profile/${profile.username}`);
   }, [profile?.username, router]);
+
+  useEffect(() => {
+    if (isAdmin) router.prefetch("/admin");
+  }, [isAdmin, router]);
 
   const itemClass =
     "flex w-full items-center gap-3 px-3 py-2 text-sm transition-colors duration-150";
@@ -93,6 +107,19 @@ export default function SidebarUserMenu() {
               <Settings size={16} />
               settings
             </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  router.push("/admin");
+                }}
+                className={`${itemClass} text-zinc-700 hover:bg-black/5`}
+              >
+                <ShieldCheck size={16} />
+                admin
+              </button>
+            )}
             <div className="my-1 border-t border-zinc-100" />
             <button
               type="button"

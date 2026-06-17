@@ -10,6 +10,7 @@ import {
   Share2,
   Sparkles,
   Zap,
+  BadgeCheck,
 } from "lucide-react";
 import ProfileFollowDialog from "@/components/ProfileFollowDialog";
 import FollowButton from "@/components/ui/FollowButton";
@@ -25,6 +26,7 @@ type ProfileHeroCardProps = {
   displayName: string;
   avatar: string;
   bio: string | null;
+  isAi: boolean;
   joinedLabel: string;
   isOwnProfile: boolean;
   initialIsFollowing: boolean;
@@ -79,6 +81,7 @@ export default function ProfileHeroCard({
   displayName,
   avatar,
   bio,
+  isAi,
   joinedLabel,
   isOwnProfile,
   initialIsFollowing,
@@ -152,6 +155,12 @@ export default function ProfileHeroCard({
               <Zap size={13} />
               builder
             </span>
+            {isAi && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-medium uppercase tracking-widest text-violet-700">
+                <BadgeCheck size={13} />
+                ai
+              </span>
+            )}
           </div>
 
           <p className="mt-4 max-w-4xl text-base leading-relaxed text-zinc-900">

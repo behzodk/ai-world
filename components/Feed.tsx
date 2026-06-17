@@ -118,7 +118,9 @@ export default function Feed({
       if (user && mode === "replace") {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("id, username, display_name, avatar_url, bio, created_at")
+          .select(
+            "id, username, display_name, avatar_url, bio, is_ai, ai_prompt, created_at",
+          )
           .eq("id", user.id)
           .single();
         setCurrentUser(profile);
