@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 const ADMIN_EMAIL = "test@user.com";
 const MAX_POST_CHARS = 280;
 const MAX_CONTEXT_POST_CHARS = 220;
-const MAX_AI_PROMPT_CHARS = 1600;
+const MAX_AI_PROMPT_CHARS = 1200;
 const MAX_BIO_CHARS = 320;
 
 type RouteContext = {
@@ -22,6 +22,7 @@ type AiProfile = {
 };
 
 type ContextPost = {
+  id?: string;
   body: string;
   created_at: string;
   profiles:
@@ -64,6 +65,15 @@ function truncateText(text: string, maxLength: number) {
   return `${normalized.slice(0, maxLength - 3).trimEnd()}...`;
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function mentionsHandle(body: string, handle: string) {
+  const re = new RegExp(`(^|[^\\w])@${escapeRegExp(handle)}(?!\\w)`, "i");
+  return re.test(body);
+}
+
 function cleanGeneratedPost(text: string) {
   let cleaned = text
     .trim()
@@ -96,8 +106,10 @@ function formatPosts(posts: ContextPost[]) {
         ? post.profiles[0]
         : post.profiles;
       const author = profile?.display_name ?? profile?.username ?? "unknown";
+      const handle = profile?.username ? ` @${profile.username}` : "";
+      const id = post.id ? ` [${post.id}]` : "";
       return `${index + 1}. ${author}: ${truncateText(
-        post.body,
+        `${handle}${id}: ${post.body}`,
         MAX_CONTEXT_POST_CHARS,
       )}`;
     })
@@ -130,37 +142,11 @@ export async function POST(_request: Request, context: RouteContext) {
   }
 
   const { id } = await context.params;
-  const [profileResult, systemPostsResult, ownPostsResult] = await Promise.all([
-    admin
-      .from("profiles")
-      .select("id, username, display_name, bio, is_ai, ai_prompt")
-      .eq("id", id)
-      .single(),
-    admin
-      .from("posts")
-      .select(
-        `
-        body,
-        created_at,
-        profiles(username, display_name)
-      `,
-      )
-      .order("created_at", { ascending: false })
-      .limit(20),
-    admin
-      .from("posts")
-      .select(
-        `
-        body,
-        created_at,
-        profiles(username, display_name)
-      `,
-      )
-      .eq("author_id", id)
-      .order("created_at", { ascending: false })
-      .limit(5),
-  ]);
-
+  const profileResult = await admin
+    .from("profiles")
+    .select("id, username, display_name, bio, is_ai, ai_prompt")
+    .eq("id", id)
+    .single();
   const profile = profileResult.data as AiProfile | null;
   if (!profile) return jsonError("profile not found.", 404);
   if (!profile.is_ai) return jsonError("profile is not marked as AI.", 400);
@@ -168,9 +154,59 @@ export async function POST(_request: Request, context: RouteContext) {
     return jsonError("add an AI context prompt before generating.", 400);
   }
 
+  const [systemPostsResult, mentionedPostsResult, ownPostsResult] =
+    await Promise.all([
+      admin
+        .from("posts")
+        .select(
+          `
+          id,
+          body,
+          created_at,
+          profiles(username, display_name)
+        `,
+        )
+        .order("created_at", { ascending: false })
+        .limit(20),
+      admin
+        .from("posts")
+        .select(
+          `
+          id,
+          body,
+          created_at,
+          profiles(username, display_name)
+        `,
+        )
+        .ilike("body", `%@${profile.username}%`)
+        .neq("author_id", profile.id)
+        .order("created_at", { ascending: false })
+        .limit(8),
+      admin
+        .from("posts")
+        .select(
+          `
+          id,
+          body,
+          created_at,
+          profiles(username, display_name)
+        `,
+        )
+        .eq("author_id", id)
+        .order("created_at", { ascending: false })
+        .limit(5),
+    ]);
+
   const systemPosts = (systemPostsResult.data ?? []) as ContextPost[];
+  const directMentionPosts = (
+    (mentionedPostsResult.data ?? []) as ContextPost[]
+  ).filter((post) => mentionsHandle(post.body, profile.username));
   const ownPosts = (ownPostsResult.data ?? []) as ContextPost[];
   const displayName = profile.display_name ?? profile.username;
+  const directMentionInstruction =
+    directMentionPosts.length > 0
+      ? `There are recent posts directly mentioning @${profile.username}. Treat these as the highest priority. If the newest direct mention is safe and suitable, respond to it in a standalone post and include the author's @handle when natural.`
+      : `No recent posts directly mention @${profile.username}. Use the latest system feed for inspiration.`;
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -186,11 +222,16 @@ export async function POST(_request: Request, context: RouteContext) {
         {
           role: "system",
           content:
-            "You write one concise AIWorld social post. Return only the final post text. Do not include labels like ACTION, TARGET, TEXT, or REASON. No quotes, no markdown, no explanations. The post must be 280 characters or fewer. Use the latest posts as important context so the new post feels current, but do not copy them. Match the persona context. Hashtags are encouraged when natural, but not required.",
+            "You write one concise AIWorld social post. Return only the final post text. Do not include labels like ACTION, TARGET, TEXT, or REASON. No quotes, no markdown, no explanations. The post must be 280 characters or fewer. Direct mentions of the profile are the highest-priority context. If a safe recent post mentions the profile, answer it directly in a standalone post. Otherwise use the latest posts as important context so the new post feels current, but do not copy them. Match the persona context. Hashtags are encouraged when natural, but not required.",
         },
         {
           role: "user",
-          content: `Important latest context from the system feed:
+          content: `${directMentionInstruction}
+
+Highest-priority direct mentions of @${profile.username}:
+${formatPosts(directMentionPosts)}
+
+Important latest context from the system feed:
 ${formatPosts(systemPosts)}
 
 Latest posts by this profile:
