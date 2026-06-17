@@ -4,6 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 
 const ADMIN_EMAIL = "test@user.com";
 const MAX_POST_CHARS = 280;
+const MAX_CONTEXT_POST_CHARS = 220;
+const MAX_AI_PROMPT_CHARS = 1600;
+const MAX_BIO_CHARS = 320;
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -55,12 +58,30 @@ function getResponseText(payload: OpenAiResponse) {
   );
 }
 
+function truncateText(text: string, maxLength: number) {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength - 3).trimEnd()}...`;
+}
+
 function cleanGeneratedPost(text: string) {
-  const cleaned = text
+  let cleaned = text
     .trim()
     .replace(/^["'“”]+|["'“”]+$/g, "")
     .replace(/\s+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n");
+
+  const textLine = cleaned.match(/^TEXT:\s*(.+)$/im);
+  if (textLine?.[1]) {
+    cleaned = textLine[1].trim();
+  }
+
+  cleaned = cleaned
+    .split("\n")
+    .filter((line) => !/^(ACTION|TARGET|REASON)\s*:/i.test(line.trim()))
+    .join("\n")
+    .trim()
+    .replace(/^["'“”]+|["'“”]+$/g, "");
 
   if (cleaned.length <= MAX_POST_CHARS) return cleaned;
   return `${cleaned.slice(0, MAX_POST_CHARS - 3).trimEnd()}...`;
@@ -75,7 +96,10 @@ function formatPosts(posts: ContextPost[]) {
         ? post.profiles[0]
         : post.profiles;
       const author = profile?.display_name ?? profile?.username ?? "unknown";
-      return `${index + 1}. ${author}: ${post.body}`;
+      return `${index + 1}. ${author}: ${truncateText(
+        post.body,
+        MAX_CONTEXT_POST_CHARS,
+      )}`;
     })
     .join("\n");
 }
@@ -162,25 +186,25 @@ export async function POST(_request: Request, context: RouteContext) {
         {
           role: "system",
           content:
-            "You write one concise AIWorld social post. Return only the post text. No quotes, no markdown, no explanations. Keep it under 280 characters. Match the persona context. Be specific, natural, and avoid repeating recent posts.",
+            "You write one concise AIWorld social post. Return only the final post text. Do not include labels like ACTION, TARGET, TEXT, or REASON. No quotes, no markdown, no explanations. The post must be 280 characters or fewer. Use the latest posts as important context so the new post feels current, but do not copy them. Match the persona context. Hashtags are encouraged when natural, but not required.",
         },
         {
           role: "user",
-          content: `Profile:
-name: ${displayName}
-username: @${profile.username}
-bio: ${profile.bio ?? "none"}
-
-AI context prompt:
-${profile.ai_prompt}
-
-20 latest posts in the system:
+          content: `Important latest context from the system feed:
 ${formatPosts(systemPosts)}
 
-5 latest posts by this profile:
+Latest posts by this profile:
 ${formatPosts(ownPosts)}
 
-Generate one new original post for this profile now.`,
+Profile:
+name: ${displayName}
+username: @${profile.username}
+bio: ${profile.bio ? truncateText(profile.bio, MAX_BIO_CHARS) : "none"}
+
+AI persona context. This may be long; use it for voice and constraints after considering the latest posts above:
+${truncateText(profile.ai_prompt, MAX_AI_PROMPT_CHARS)}
+
+Generate one new original post for this profile now. Return the post text only, 280 characters maximum.`,
         },
       ],
     }),

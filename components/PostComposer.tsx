@@ -129,9 +129,9 @@ export default function PostComposer({
       )}
 
       <div className="min-w-0 flex-1">
-        {/* Live hashtag highlighting: a mirror layer renders the same text with
-            #tags colored violet, behind a transparent-text textarea. Both share
-            identical metrics so the caret stays aligned (color-only, no pills). */}
+        {/* Live token highlighting: a mirror layer renders the same text with
+            hashtags and mentions colored behind a transparent-text textarea.
+            Both share identical metrics so the caret stays aligned. */}
         <div className="relative">
           <div
             aria-hidden
@@ -140,8 +140,12 @@ export default function PostComposer({
             {splitBody(value).map((seg, i) =>
               seg.type === "text" ? (
                 <span key={i}>{seg.value}</span>
+              ) : seg.type === "mention" ? (
+                <span key={i} className="font-medium text-violet-600">
+                  {seg.value}
+                </span>
               ) : (
-                <span key={i} className="text-[#3d4d0a]">
+                <span key={i} className="font-medium text-[#3d4d0a]">
                   {seg.value}
                 </span>
               ),
